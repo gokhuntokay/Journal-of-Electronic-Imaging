@@ -1,0 +1,20 @@
+85% of storage used … If you run out, you can't create, edit, and upload files.
+import cv2
+import numpy as np
+
+# Görseli okuyun
+image = cv2.imread('1.png', cv2.IMREAD_GRAYSCALE)
+
+# Thresholding işlemi yapın
+_, thresholded = cv2.threshold(image, 10, 255, cv2.THRESH_BINARY_INV)
+
+# Toplam piksel sayısını alın
+total_pixels = image.size
+
+# Siyah piksellerin sayısını hesaplayın
+black_pixels = np.sum(thresholded == 255)
+
+# Siyah piksellerin yüzdesini hesaplayın
+black_pixel_percentage = (black_pixels / total_pixels) * 100
+
+print(f"Siyah piksellerin yüzdesi: {black_pixel_percentage:.2f}%")
