@@ -1,0 +1,71 @@
+85% of storage used … If you run out, you can't create, edit, and upload files.
+# Gerekli kütüphaneleri yükleme
+!pip install opencv-python numpy pandas
+
+import cv2
+import numpy as np
+import pandas as pd
+import os
+
+# Analiz sonuçlarını saklamak için liste oluşturma
+results = []
+
+# 1.png'den 25.png'e kadar olan görüntüleri işleme
+for i in range(1, 26):
+    file_name = f"{i}.png"
+    
+    # Görüntüyü okuma (siyah-beyaz olarak)
+    if os.path.exists(file_name):
+        img = cv2.imread(file_name, cv2.IMREAD_GRAYSCALE)
+        
+        # Görüntü yüklenemediyse hata mesajı
+        if img is None:
+            print(f"{file_name} yüklenemedi.")
+            continue
+        
+        # Toplam piksel sayısını hesaplama
+        total_pixels = img.size
+        
+        # Görüntüyü binary forma çevirme (eşikleme: 50, binary invert)
+        _, thresh = cv2.threshold(img, 50, 255, cv2.THRESH_BINARY_INV)
+        
+        # Connected Components analizi
+        num_labels, labels, stats, _ = cv2.connectedComponentsWithStats(thresh, connectivity=8)
+        
+        # Parçacık sayısı (arka plan hariç, num_labels - 1)
+        num_particles = num_labels - 1
+        
+        # Toplam alan (px²): arka plan hariç tüm bileşenlerin alanı
+        total_area = sum(stats[label, cv2.CC_STAT_AREA] for label in range(1, num_labels))
+        
+        # Ortalama boyut (px²)
+        avg_size = total_area / num_particles if num_particles > 0 else 0
+        
+        # Alan yüzdesi (%)
+        area_percent = (total_area / total_pixels) * 100 if total_pixels > 0 else 0
+        
+    
+        
+        # Sonuçları listeye ekleme
+        results.append({
+            "Image": file_name,
+            "Number of Particles": num_particles,
+            "Total Area (px²)": total_area,
+            "Average Size (px²)": avg_size,
+            "Area %": area_percent,
+            
+        })
+        
+        print(f"{file_name} işlendi.")
+    else:
+        print(f"{file_name} bulunamadı.")
+
+# Sonuçları pandas DataFrame'e çevirme
+df = pd.DataFrame(results)
+
+# CSV dosyasına kaydetme
+df.to_csv("sem_analysis_results_connected_components.csv", index=False)
+print("Sonuçlar 'sem_analysis_results_connected_components.csv' dosyasına kaydedildi.")
+
+# DataFrame'i ekranda gösterme (isteğe bağlı)
+print(df)
