@@ -1,0 +1,38 @@
+85% of storage used … If you run out, you can't create, edit, and upload files.
+import cv2
+import numpy as np
+import os
+
+# Görsellerin bulunduğu dizin
+image_dir = '/content/'  # Colab'de görsellerin yüklü olduğu dizin
+output_dir = '/content/output/'  # İşlenmiş görsellerin kaydedileceği dizin
+
+# Eğer output dizini yoksa oluştur
+if not os.path.exists(output_dir):
+    os.makedirs(output_dir)
+
+# Eşik değeri
+threshold_value = 10
+
+# Dizindeki tüm PNG görsellerini işle
+for i in range(1, 26):  # 1'den 25'e kadar
+    image_path = os.path.join(image_dir, f'{i}.png')  # Görselin yolu
+    if os.path.exists(image_path):
+        # Görseli yükle
+        image = cv2.imread(image_path, cv2.IMREAD_GRAYSCALE)
+        
+        # Eşikleme işlemi
+        _, thresholded_image = cv2.threshold(image, threshold_value, 255, cv2.THRESH_BINARY_INV)
+        
+        # Siyah pikselleri (boşlukları) hesapla
+        black_pixels = np.sum(thresholded_image == 0)
+        
+        # İşlenmiş görseli kaydet
+        output_path = os.path.join(output_dir, f'{i}_thresholded.png')
+        cv2.imwrite(output_path, thresholded_image)
+        
+        print(f'{i}.png - Siyah Piksel Sayısı (Boşluk): {black_pixels}')
+    else:
+        print(f'{i}.png bulunamadı.')
+
+print("İşlem tamamlandı.")
