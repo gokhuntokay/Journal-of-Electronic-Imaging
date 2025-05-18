@@ -1,0 +1,85 @@
+85% of storage used … If you run out, you can't create, edit, and upload files.
+import cv2
+import os
+import pandas as pd
+import numpy as np
+
+def analyze_particles_opencv(image_path, threshold=50):
+    """Analyzes particles in an image using OpenCV."""
+
+    try:
+      img = cv2.imread(image_path, cv2.IMREAD_GRAYSCALE)
+
+      if img is None:
+        print(f"Hata: Resim yüklenemedi: {image_path}")
+        return None
+
+      _, thresh = cv2.threshold(img, threshold, 255, cv2.THRESH_BINARY_INV)
+
+      num_labels, labels, stats, centroids = cv2.connectedComponentsWithStats(thresh, connectivity=8)
+
+      if num_labels > 1:
+        total_area = np.sum(stats[1:, cv2.CC_STAT_AREA])
+        particle_count = num_labels - 1
+        if particle_count > 0:
+          average_size = total_area / particle_count
+        else:
+          average_size = 0
+          
+        total_image_area = img.shape[0] * img.shape[1]
+        percentage_area = (100 * total_area) / total_image_area
+      else:
+        total_area = 0
+        particle_count = 0
+        average_size = 0
+        percentage_area = 0
+
+      return {
+          "Number of Particles": particle_count,
+          "Total Area": round(total_area, 2),
+          "Average Size": round(average_size, 2),
+          "% Area": round(percentage_area, 2),
+      }
+
+    except Exception as e:
+        print(f"An error ocurred processing {image_path}, Error:{e}")
+        return None
+
+
+def batch_analyze_particles(input_dir, output_path, threshold=50):
+    results_list = []
+    filenames = os.listdir(input_dir)
+
+    # Sort file names (it sorts 1.png before 10.png or 2.png, we fix here, if user use name in proper numerical ordering.)
+    filenames = sorted(filenames, key=lambda f: int("".join(filter(str.isdigit, f))) if "".join(filter(str.isdigit, f)) else 0) 
+
+    for filename in filenames:
+
+        if filename.lower().endswith((".png")):
+            file_path = os.path.join(input_dir, filename)
+            result = analyze_particles_opencv(file_path, threshold)
+            
+            if result:
+               result['Filename'] = filename
+               results_list.append(result)
+
+    df = pd.DataFrame(results_list)
+    df.to_csv(output_path, index=False)
+    
+
+
+if __name__ == '__main__':
+  
+    input_dir = "/content/"
+    output_path = "particle_analysis.csv"
+    threshold = 50 # Fixed value 50. User input removed.
+
+    batch_analyze_particles(input_dir, output_path, threshold)
+
+    print (f"Analysis of particles finished and results exported into: '{output_path}'\n File can be downloaded on Google Colab (Left Files Bar) .  ")
+
+    from google.colab import files
+    # Optional download in Google Colab using files, instead user search and click for manual download
+    if ( os.path.isfile(output_path)):
+
+           files.download(output_path)
