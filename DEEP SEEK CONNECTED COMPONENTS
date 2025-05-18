@@ -1,0 +1,62 @@
+85% of storage used … If you run out, you can't create, edit, and upload files.
+import cv2
+import numpy as np
+import os
+import csv
+
+# Görsellerin bulunduğu klasör yolu (Colab'ın /content/ dizini içinde olduğunu varsayıyoruz)
+image_folder = '/content/'
+
+# Görsel dosya isimleri
+file_names = [f"{i}.png" for i in range(1, 26)]
+
+# Threshold değeri
+threshold_value = 50
+
+# Sonuçları saklamak için liste
+results = []
+
+# Her bir görsel için işlem yap
+for image_name in file_names:
+    # Görseli yükle
+    image_path = os.path.join(image_folder, image_name)
+    image = cv2.imread(image_path, cv2.IMREAD_GRAYSCALE)
+    
+    # Görsel yüklenemediyse uyarı ver ve devam et
+    if image is None:
+        print(f"Warning: {image_name} could not be loaded. Skipping...")
+        continue
+    
+    # Threshold uygula
+    _, binary_image = cv2.threshold(image, threshold_value, 255, cv2.THRESH_BINARY_INV)
+    
+    # Connected Components analizi yap
+    num_labels, labels, stats, centroids = cv2.connectedComponentsWithStats(binary_image, connectivity=8)
+    
+    # Görseldeki partikül sayısı (background'u çıkar)
+    num_particles = num_labels - 1
+    
+    # Toplam alan ve ortalama boyut hesapla
+    total_area = 0
+    for i in range(1, num_labels):  # 0. indeks background'u temsil eder
+        total_area += stats[i, cv2.CC_STAT_AREA]
+    
+    avg_size = total_area / num_particles if num_particles > 0 else 0
+    
+    # Görselin toplam alanı
+    image_area = image.shape[0] * image.shape[1]
+    
+    # Alan yüzdesi
+    area_percentage = (total_area / image_area) * 100
+    
+    # Sonuçları listeye ekle
+    results.append([image_name, num_particles, total_area, avg_size, area_percentage])
+
+# Sonuçları CSV dosyasına yaz
+output_file = '/content/SEM_Results_ConnectedComponents.csv'
+with open(output_file, mode='w', newline='') as file:
+    writer = csv.writer(file)
+    writer.writerow(["Image Name", "Number of Particles", "Total Area (px²)", "Average Size (px²)", "Area %"])
+    writer.writerows(results)
+
+print(f"Results saved to {output_file}")
