@@ -1,70 +1,56 @@
-# Gerekli kütüphaneleri yükleme
-!pip install opencv-python numpy pandas
-
 import cv2
 import numpy as np
-import pandas as pd
 import os
+from pathlib import Path
 
-# Analiz sonuçlarını saklamak için liste oluşturma
+# Define input directory
+input_dir = "/content/"
+# Initialize results storage
 results = []
 
-# 1.png'den 25.png'e kadar olan görüntüleri işleme
+# Process images 1.png to 25.png
 for i in range(1, 26):
-    file_name = f"{i}.png"
+    image_path = os.path.join(input_dir, f"{i}.png")
     
-    # Görüntüyü okuma (siyah-beyaz olarak)
-    if os.path.exists(file_name):
-        img = cv2.imread(file_name, cv2.IMREAD_GRAYSCALE)
-        
-        # Görüntü yüklenemediyse hata mesajı
-        if img is None:
-            print(f"{file_name} yüklenemedi.")
-            continue
-        
-        # Toplam piksel sayısını hesaplama
-        total_pixels = img.size
-        
-        # Görüntüyü binary forma çevirme (eşikleme: 50, binary invert)
-        _, thresh = cv2.threshold(img, 50, 255, cv2.THRESH_BINARY_INV)
-        
-        # Connected Components analizi
-        num_labels, labels, stats, _ = cv2.connectedComponentsWithStats(thresh, connectivity=8)
-        
-        # Parçacık sayısı (arka plan hariç, num_labels - 1)
-        num_particles = num_labels - 1
-        
-        # Toplam alan (px²): arka plan hariç tüm bileşenlerin alanı
-        total_area = sum(stats[label, cv2.CC_STAT_AREA] for label in range(1, num_labels))
-        
-        # Ortalama boyut (px²)
-        avg_size = total_area / num_particles if num_particles > 0 else 0
-        
-        # Alan yüzdesi (%)
-        area_percent = (total_area / total_pixels) * 100 if total_pixels > 0 else 0
-        
+    # Check if file exists
+    if not os.path.exists(image_path):
+        print(f"Image {image_path} not found, skipping.")
+        continue
     
-        
-        # Sonuçları listeye ekleme
-        results.append({
-            "Image": file_name,
-            "Number of Particles": num_particles,
-            "Total Area (px²)": total_area,
-            "Average Size (px²)": avg_size,
-            "Area %": area_percent,
-            
-        })
-        
-        print(f"{file_name} işlendi.")
-    else:
-        print(f"{file_name} bulunamadı.")
+    # Read grayscale image
+    img = cv2.imread(image_path, cv2.IMREAD_GRAYSCALE)
+    if img is None:
+        print(f"Failed to load {image_path}, skipping.")
+        continue
+    
+    # Apply binary thresholding (THRESH_BINARY_INV, threshold = 50)
+    _, binary = cv2.threshold(img, 50, 255, cv2.THRESH_BINARY_INV)
+    
+    # Perform connected components analysis with stats
+    num_labels, _, stats, _ = cv2.connectedComponentsWithStats(binary, connectivity=8)
+    
+    # Calculate metrics
+    total_image_area = img.shape[0] * img.shape[1]  # Total pixels in image
+    num_particles = num_labels - 1  # Subtract background label
+    total_particle_area = np.sum(stats[1:, cv2.CC_STAT_AREA]) if num_labels > 1 else 0
+    avg_particle_size = total_particle_area / num_particles if num_particles > 0 else 0
+    area_percent = (total_particle_area / total_image_area * 100) if total_image_area > 0 else 0
+    
+    # Store results
+    results.append({
+        "Image": f"{i}.png",
+        "Number of Particles": num_particles,
+        "Total Area (px²)": total_particle_area,
+        "Average Size (px²)": avg_particle_size,
+        "Area %": area_percent
+    })
 
-# Sonuçları pandas DataFrame'e çevirme
-df = pd.DataFrame(results)
-
-# CSV dosyasına kaydetme
-df.to_csv("sem_analysis_results_connected_components.csv", index=False)
-print("Sonuçlar 'sem_analysis_results_connected_components.csv' dosyasına kaydedildi.")
-
-# DataFrame'i ekranda gösterme (isteğe bağlı)
-print(df)
+# Print results
+print("\nAnalysis Results:")
+print("-" * 60)
+print(f"{'Image':<10} {'Particles':<12} {'Total Area (px²)':<18} {'Avg Size (px²)':<15} {'Area %':<10}")
+print("-" * 60)
+for result in results:
+    print(f"{result['Image']:<10} {result['Number of Particles']:<12} {result['Total Area (px²)']:<18} "
+          f"{result['Average Size (px²)']:<15.2f} {result['Area %']:<10.2f}")
+print("-" * 60)
