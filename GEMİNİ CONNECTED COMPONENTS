@@ -1,84 +1,93 @@
 import cv2
-import os
-import pandas as pd
 import numpy as np
+import os
 
-def analyze_particles_opencv(image_path, threshold=50):
-    """Analyzes particles in an image using OpenCV."""
+# --- Configuration ---
+image_folder = '/content/'
+num_images = 25
+threshold_value = 50
+connectivity = 8 # For connected components
 
-    try:
-      img = cv2.imread(image_path, cv2.IMREAD_GRAYSCALE)
+# --- Analysis ---
+results = []
 
-      if img is None:
-        print(f"Hata: Resim yüklenemedi: {image_path}")
-        return None
+for i in range(1, num_images + 1):
+    image_name = f"{i}.png"
+    image_path = os.path.join(image_folder, image_name)
 
-      _, thresh = cv2.threshold(img, threshold, 255, cv2.THRESH_BINARY_INV)
+    if not os.path.exists(image_path):
+        print(f"Warning: Image {image_path} not found. Skipping.")
+        results.append({
+            "Image": image_name,
+            "Error": "File not found"
+        })
+        continue
 
-      num_labels, labels, stats, centroids = cv2.connectedComponentsWithStats(thresh, connectivity=8)
+    # Read the grayscale image
+    img = cv2.imread(image_path, cv2.IMREAD_GRAYSCALE)
 
-      if num_labels > 1:
-        total_area = np.sum(stats[1:, cv2.CC_STAT_AREA])
-        particle_count = num_labels - 1
-        if particle_count > 0:
-          average_size = total_area / particle_count
-        else:
-          average_size = 0
-          
-        total_image_area = img.shape[0] * img.shape[1]
-        percentage_area = (100 * total_area) / total_image_area
-      else:
-        total_area = 0
-        particle_count = 0
-        average_size = 0
-        percentage_area = 0
+    if img is None:
+        print(f"Warning: Could not read image {image_path}. Skipping.")
+        results.append({
+            "Image": image_name,
+            "Error": "Could not read image"
+        })
+        continue
 
-      return {
-          "Number of Particles": particle_count,
-          "Total Area": round(total_area, 2),
-          "Average Size": round(average_size, 2),
-          "% Area": round(percentage_area, 2),
-      }
+    # 1. Apply binary thresholding
+    _, thresh_img = cv2.threshold(img, threshold_value, 255, cv2.THRESH_BINARY_INV)
 
-    except Exception as e:
-        print(f"An error ocurred processing {image_path}, Error:{e}")
-        return None
+    # 2. Connected Components Analysis
+    # The first element is the number of labels (num_labels)
+    # The second element is the labels matrix (labels)
+    # The third element is the stats matrix (stats)
+    # The fourth element is the centroids matrix (centroids)
+    num_labels, labels, stats, centroids = cv2.connectedComponentsWithStats(thresh_img, connectivity, cv2.CV_32S)
 
+    # The first label (0) is the background. We need to exclude it.
+    # Number of particles is num_labels - 1
+    number_of_particles = num_labels - 1
 
-def batch_analyze_particles(input_dir, output_path, threshold=50):
-    results_list = []
-    filenames = os.listdir(input_dir)
+    if number_of_particles == 0:
+        total_particle_area = 0
+        average_particle_size = 0
+    else:
+        # Filter out the background component's stats
+        # stats[0] is the background
+        particle_areas = stats[1:, cv2.CC_STAT_AREA] # Area is the 5th column (index 4)
+        total_particle_area = np.sum(particle_areas)
+        average_particle_size = np.mean(particle_areas)
 
-    # Sort file names (it sorts 1.png before 10.png or 2.png, we fix here, if user use name in proper numerical ordering.)
-    filenames = sorted(filenames, key=lambda f: int("".join(filter(str.isdigit, f))) if "".join(filter(str.isdigit, f)) else 0) 
+    # Calculate total image area
+    img_height, img_width = img.shape
+    total_image_area = img_height * img_width
 
-    for filename in filenames:
+    # Calculate Area %
+    area_percentage = (total_particle_area / total_image_area) * 100 if total_image_area > 0 else 0
 
-        if filename.lower().endswith((".png")):
-            file_path = os.path.join(input_dir, filename)
-            result = analyze_particles_opencv(file_path, threshold)
-            
-            if result:
-               result['Filename'] = filename
-               results_list.append(result)
+    results.append({
+        "Image": image_name,
+        "Number of Particles": number_of_particles,
+        "Total Particle Area (px²)": total_particle_area,
+        "Average Particle Size (px²)": round(average_particle_size, 2) if number_of_particles > 0 else 0,
+        "Area %": round(area_percentage, 2)
+    })
 
-    df = pd.DataFrame(results_list)
-    df.to_csv(output_path, index=False)
-    
+# --- Display Results ---
+print("--- Image Analysis Results ---")
+for res in results:
+    if "Error" in res:
+        print(f"Image: {res['Image']}, Error: {res['Error']}")
+    else:
+        print(f"Image: {res['Image']}")
+        print(f"  Number of Particles: {res['Number of Particles']}")
+        print(f"  Total Particle Area (px²): {res['Total Particle Area (px²)']}")
+        print(f"  Average Particle Size (px²): {res['Average Particle Size (px²)']}")
+        print(f"  Area %: {res['Area %']}%")
+    print("-" * 30)
 
-
-if __name__ == '__main__':
-  
-    input_dir = "/content/"
-    output_path = "particle_analysis.csv"
-    threshold = 50 # Fixed value 50. User input removed.
-
-    batch_analyze_particles(input_dir, output_path, threshold)
-
-    print (f"Analysis of particles finished and results exported into: '{output_path}'\n File can be downloaded on Google Colab (Left Files Bar) .  ")
-
-    from google.colab import files
-    # Optional download in Google Colab using files, instead user search and click for manual download
-    if ( os.path.isfile(output_path)):
-
-           files.download(output_path)
+# You can also save the results to a CSV file if needed
+# import pandas as pd
+# df = pd.DataFrame(results)
+# df.to_csv("sem_image_analysis_results.csv", index=False)
+# print("\nResults also saved to sem_image_analysis_results.csv")
