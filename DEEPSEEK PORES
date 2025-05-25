@@ -1,37 +1,58 @@
 import cv2
-import numpy as np
 import os
+import numpy as np
 
-# Görsellerin bulunduğu dizin
-image_dir = '/content/'  # Colab'de görsellerin yüklü olduğu dizin
-output_dir = '/content/output/'  # İşlenmiş görsellerin kaydedileceği dizin
-
-# Eğer output dizini yoksa oluştur
-if not os.path.exists(output_dir):
-    os.makedirs(output_dir)
-
-# Eşik değeri
+# Parameters
+image_dir = '/content/'
 threshold_value = 10
+num_images = 25
 
-# Dizindeki tüm PNG görsellerini işle
-for i in range(1, 26):  # 1'den 25'e kadar
-    image_path = os.path.join(image_dir, f'{i}.png')  # Görselin yolu
-    if os.path.exists(image_path):
-        # Görseli yükle
-        image = cv2.imread(image_path, cv2.IMREAD_GRAYSCALE)
-        
-        # Eşikleme işlemi
-        _, thresholded_image = cv2.threshold(image, threshold_value, 255, cv2.THRESH_BINARY_INV)
-        
-        # Siyah pikselleri (boşlukları) hesapla
-        black_pixels = np.sum(thresholded_image == 0)
-        
-        # İşlenmiş görseli kaydet
-        output_path = os.path.join(output_dir, f'{i}_thresholded.png')
-        cv2.imwrite(output_path, thresholded_image)
-        
-        print(f'{i}.png - Siyah Piksel Sayısı (Boşluk): {black_pixels}')
-    else:
-        print(f'{i}.png bulunamadı.')
+# Initialize results list
+results = []
 
-print("İşlem tamamlandı.")
+# Process each image
+for i in range(1, num_images + 1):
+    # Load image
+    img_path = os.path.join(image_dir, f'{i}.png')
+    if not os.path.exists(img_path):
+        print(f"Warning: Image {i}.png not found, skipping...")
+        continue
+    
+    img = cv2.imread(img_path, cv2.IMREAD_GRAYSCALE)
+    if img is None:
+        print(f"Warning: Could not read image {i}.png, skipping...")
+        continue
+    
+    # Apply binary thresholding
+    _, binary_img = cv2.threshold(img, threshold_value, 255, cv2.THRESH_BINARY)
+    
+    # Calculate pore percentage (black pixels)
+    total_pixels = img.size
+    black_pixels = total_pixels - cv2.countNonZero(binary_img)
+    pore_percentage = (black_pixels / total_pixels) * 100
+    
+    # Store results
+    results.append((i, pore_percentage))
+
+# Display results
+print("\nSEM Image Analysis Results:")
+print("--------------------------")
+print("Image # | Pore %")
+print("--------|-------")
+for img_num, pore_pct in results:
+    print(f"{img_num:6} | {pore_pct:.2f}%")
+
+# Calculate and display summary statistics
+if results:
+    pore_values = [pct for _, pct in results]
+    avg_pore = np.mean(pore_values)
+    min_pore = min(pore_values)
+    max_pore = max(pore_values)
+    
+    print("\nSummary Statistics:")
+    print("------------------")
+    print(f"Average Pore %: {avg_pore:.2f}%")
+    print(f"Minimum Pore %: {min_pore:.2f}% (Image #{[num for num, pct in results if pct == min_pore][0]})")
+    print(f"Maximum Pore %: {max_pore:.2f}% (Image #{[num for num, pct in results if pct == max_pore][0]})")
+else:
+    print("\nNo images were processed.")
