@@ -1,91 +1,103 @@
 import cv2
 import numpy as np
-# from google.colab import files # Dosya yükleme kısmı kaldırıldı - CSV indirme için tekrar gerekli olabilir
-import pandas as pd
-import os # Dosya varlığını kontrol için os modülü eklendi
+import os
 
-def analyze_sem_image(image_path, threshold_value=50):
+def analyze_sem_images(image_directory, num_images=25, threshold_value=50):
     """
-    Analyzes a black and white SEM image to quantify particles using contour method.
+    Analyzes a series of grayscale SEM images in a specified directory.
 
     Args:
-        image_path (str): Path to the image file.
-        threshold_value (int, optional): Threshold value for binarization. Defaults to 50.
+        image_directory (str): The path to the directory containing the images.
+        num_images (int): The number of images to analyze (assumes 1.png to num_images.png).
+        threshold_value (int): The threshold value for binary inversion.
 
     Returns:
-        dict: A dictionary containing particle analysis results:
-              {
-                  "Number of Particles": int,
-                  "Total Area (px²)": float,
-                  "Average Size (px²)": float,
-                  "Area %": float
-              }
+        None: Prints the analysis results for each image and overall statistics.
     """
-    # Resmi gri tonlamalı olarak oku
-    img = cv2.imread(image_path, cv2.IMREAD_GRAYSCALE)
 
-    if img is None:
-        return {"error": "Resim okunamadı. Lütfen dosya yolunu ve resmin varlığını kontrol edin."}
+    total_particles_all_images = 0
+    total_area_all_images = 0
+    total_image_area_all = 0
+    images_processed = 0
 
-    # Eşikleme (threshold) uygula
-    _, thresh = cv2.threshold(img, threshold_value, 255, cv2.THRESH_BINARY_INV)
+    print("--- SEM Image Analysis ---")
+    print(f"Directory: {image_directory}")
+    print(f"Threshold Value: {threshold_value}")
+    print("-" * 30)
 
-    # Konturları bul
-    contours, _ = cv2.findContours(thresh, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
+    for i in range(1, num_images + 1):
+        image_path = os.path.join(image_directory, f"{i}.png")
 
-    particle_areas = []
-    for contour in contours:
-        area = cv2.contourArea(contour)
-        # if area > 0:  # BU SATIR ÇIKARTILDI! Küçük gürültü konturlarını filtrelemek için (opsiyonel)
-        particle_areas.append(area)
+        # Check if the file exists
+        if not os.path.exists(image_path):
+            print(f"Warning: Image {image_path} not found. Skipping.")
+            continue
 
-    num_particles = len(particle_areas)
-    total_area = sum(particle_areas)
-    average_size = total_area / num_particles if num_particles > 0 else 0
-    image_area = img.shape[0] * img.shape[1]  # Görüntü alanını hesapla
-    area_percentage = (total_area / image_area) * 100 if image_area > 0 else 0
+        # 1. Read the grayscale image
+        img = cv2.imread(image_path, cv2.IMREAD_GRAYSCALE)
 
-    return {
-        "Number of Particles": num_particles,
-        "Total Area (px²)": total_area,
-        "Average Size (px²)": average_size,
-        "Area %": area_percentage
-    }
+        if img is None:
+            print(f"Error: Could not read image {image_path}. Skipping.")
+            continue
 
-# Ana kod kısmı
-if __name__ == "__main__":
-    file_names = [f"{i}.png" for i in range(1, 26)] # Resim dosyalarının isim listesi
+        images_processed += 1
+        height, width = img.shape
+        total_image_area = height * width
 
-    image_paths = file_names
-    results_list = []
+        # 2. Apply invert binary thresholding
+        _, thresh = cv2.threshold(img, threshold_value, 255, cv2.THRESH_BINARY_INV)
 
-    for image_path in image_paths:
-        if not os.path.exists(image_path): # Dosyanın varlığını kontrol et
-            print(f"\nHata: Resim dosyası bulunamadı: {image_path}. Lütfen dosyaların Colab ortamında yüklü olduğundan emin olun.")
-            results_list.append({"Image Name": image_path, "Error": "Dosya bulunamadı"})
-            continue # Bir sonraki resme geç
+        # 3. Find external contours
+        contours, _ = cv2.findContours(thresh, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
 
-        print(f"\nAnaliz ediliyor: {image_path}")
-        analysis_result = analyze_sem_image(image_path, threshold_value=50)
+        # 4. Calculate metrics
+        num_particles = len(contours)
+        total_area_particles = 0
+        for cnt in contours:
+            total_area_particles += cv2.contourArea(cnt)
 
-        if "error" in analysis_result:
-            print(f"Hata: {image_path} - {analysis_result['error']}")
-            results_list.append({"Image Name": image_path, "Error": analysis_result["error"]})
-        else:
-            print(f"Parçacık Sayısı: {analysis_result['Number of Particles']}")
-            print(f"Toplam Alan (px²): {analysis_result['Total Area (px²)']:.2f}")
-            print(f"Ortalama Boyut (px²): {analysis_result['Average Size (px²)']:.2f}")
-            print(f"Alan %: {analysis_result['Area %']:.2f}%")
-            results_list.append({"Image Name": image_path, **analysis_result}) # Sonuçları listeye ekle
+        average_size = total_area_particles / num_particles if num_particles > 0 else 0
+        area_percent = (total_area_particles / total_image_area) * 100
 
-    # Pandas DataFrame oluştur ve sonuçları göster
-    df_results = pd.DataFrame(results_list)
-    print("\n--- Tüm Resimlerin Analiz Sonuçları ---")
-    print(df_results)
+        # Update overall statistics
+        total_particles_all_images += num_particles
+        total_area_all_images += total_area_particles
+        total_image_area_all += total_image_area
 
-    # Sonuçları CSV dosyasına kaydetme (AKTİF HALE GETİRİLDİ)
-    csv_file_name = "sem_image_analysis_results.csv"
-    df_results.to_csv(csv_file_name, index=False)
+        # 5. Print results for the current image
+        print(f"--- Image: {i}.png ---")
+        print(f"  Number of Particles: {num_particles}")
+        print(f"  Total Particle Area (px²): {total_area_particles:.2f}")
+        print(f"  Average Particle Size (px²): {average_size:.2f}")
+        print(f"  Area %: {area_percent:.2f}%")
+        print("-" * 30)
 
-    from google.colab import files # CSV indirme için import eklendi
-    files.download(csv_file_name) # Colab'dan indirme linki oluşturur, CSV dosyasını indirir
+
+    # Print Overall Statistics
+    if images_processed > 0:
+        overall_average_particles = total_particles_all_images / images_processed
+        overall_average_area = total_area_all_images / images_processed
+        overall_average_size = total_area_all_images / total_particles_all_images if total_particles_all_images > 0 else 0
+        overall_area_percent = (total_area_all_images / total_image_area_all) * 100
+
+        print("\n--- Overall Statistics ---")
+        print(f"  Images Processed: {images_processed}")
+        print(f"  Total Particles Found: {total_particles_all_images}")
+        print(f"  Average Particles per Image: {overall_average_particles:.2f}")
+        print(f"  Average Total Area per Image (px²): {overall_average_area:.2f}")
+        print(f"  Overall Average Particle Size (px²): {overall_average_size:.2f}")
+        print(f"  Overall Area %: {overall_area_percent:.2f}%")
+        print("=" * 30)
+    else:
+        print("No images were processed. Please check the directory and image names.")
+
+
+# --- How to use ---
+# 1. Make sure you have OpenCV installed: pip install opencv-python numpy
+# 2. Place your 25 grayscale images (1.png, 2.png, ..., 25.png) in a directory.
+# 3. Change 'your_image_directory_path' to the actual path of your directory.
+#    If using Google Colab and images are in /content/, use '/content/'.
+
+# Example usage (replace with your actual path):
+image_directory = '/content/'
+analyze_sem_images(image_directory)
