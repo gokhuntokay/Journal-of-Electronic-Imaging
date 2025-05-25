@@ -1,64 +1,38 @@
 import cv2
-import numpy as np
 import os
-from openpyxl import Workbook  # Excel dosyası oluşturmak için
+import numpy as np
 
-# Yuvarlaklık ve katılık hesaplama fonksiyonları
-def calculate_circularity(area, perimeter):
-    if perimeter == 0:
-        return 0
-    return 4 * np.pi * (area / (perimeter ** 2))
+def analyze_pores(image_path):
+    # Read image in grayscale
+    img = cv2.imread(image_path, cv2.IMREAD_GRAYSCALE)
+    if img is None:
+        print(f"Error loading image: {image_path}")
+        return None
 
-def calculate_solidity(area, hull_area):
-    if hull_area == 0:
-        return 0
-    return area / hull_area
+    # Apply binary threshold
+    _, binary = cv2.threshold(img, 10, 255, cv2.THRESH_BINARY)
 
-# Görüntü işleme ve analiz
-results = []
+    # Calculate pore percentage (black pixels are 0 in binary image)
+    total_pixels = binary.size
+    black_pixels = np.sum(binary == 0)
+    pore_percentage = (black_pixels / total_pixels) * 100
 
-# Dosya adları "1.png" ile "25.png" arasında
-for i in range(1, 26):
-    filename = f"{i}.png"
-    filepath = filename  # Dosyalar mevcut dizinde varsayılıyor
+    return pore_percentage
 
-    image = cv2.imread(filepath, cv2.IMREAD_GRAYSCALE)
+def main():
+    base_path = "/content/"
+    results = []
 
-    if image is None:
-        print(f"Dosya açılamadı: {filename}")
-        continue
+    for i in range(1, 26):
+        image_file = os.path.join(base_path, f"{i}.png")
+        pore_percentage = analyze_pores(image_file)
+        if pore_percentage is not None:
+            results.append((i, pore_percentage))
 
-    # Siyah piksel yüzdesi hesaplama
-    _, binary = cv2.threshold(image, 10, 255, cv2.THRESH_BINARY)
-    black_pixel_percentage = (np.sum(binary == 0) / binary.size) * 100
+    # Display the results
+    print("Pore Analysis Results:")
+    for img_num, pore_pct in results:
+        print(f"Image {img_num}: Pore % = {pore_pct:.2f}%")
 
-    # Sonuçları kaydet
-    results.append({
-        "filename": filename,
-        "black_pixel_percentage": black_pixel_percentage,
-    })
-
-# Sonuçları yazdır
-for result in results:
-    print(f"Görsel: {result['filename']}")
-    print(f"Siyah Piksel Yüzdesi: {result['black_pixel_percentage']:.2f}%")
-    print("-" * 40)
-
-# Excel dosyasına yazma
-workbook = Workbook()
-sheet = workbook.active
-sheet.title = "Sonuçlar"
-
-# Başlıklar
-headers = ["Dosya Adı", "Siyah Piksel Yüzdesi"]
-sheet.append(headers)
-
-# Veriler
-for result in results:
-    sheet.append([result["filename"], result["black_pixel_percentage"]])
-
-# Excel dosyasını kaydet
-excel_file_name = "siyah_piksel_sonuclari.xlsx"
-workbook.save(excel_file_name)
-
-print(f"Sonuçlar {excel_file_name} dosyasına kaydedildi.")
+if __name__ == "__main__":
+    main()
