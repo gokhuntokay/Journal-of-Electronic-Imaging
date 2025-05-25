@@ -1,46 +1,85 @@
 import cv2
-import numpy as np
 import os
+import numpy as np
 
-def calculate_black_pixel_percentage(image, threshold=10):
+def analyze_sem_images(directory_path):
     """
-    Calculates the percentage of black pixels in an image.
+    Analyzes grayscale SEM images in a directory to calculate pore percentage.
 
     Args:
-        image (numpy.ndarray): The input image (should be grayscale).
-        threshold (int): Pixels with a value equal or lower to this
-                         are considered 'black'. Default is 10
-
-    Returns:
-        float: The percentage of black pixels in the image.
+        directory_path (str): The path to the directory containing the images.
     """
-    black_pixels = np.sum(image <= threshold)
-    total_pixels = image.shape[0] * image.shape[1]
 
-    if total_pixels == 0:
-        return 0.0
+    print("--- SEM Image Pore Analysis ---")
 
-    percentage = (black_pixels / total_pixels) * 100
+    for i in range(1, 26):
+        image_name = f"{i}.png"
+        image_path = os.path.join(directory_path, image_name)
 
-    return percentage
-
-
-if __name__ == "__main__":
-
-    # set threshold value, so values under this parameter is black
-    threshold_value = 10
-
-    for i in range(1, 26):  # Loop through images from 1.png to 25.png
-        image_path = f"{i}.png" # Changed to look directly in same directory as the .py file
-
-        try:
-            image = cv2.imread(image_path, cv2.IMREAD_GRAYSCALE) #Load in grayscale mode.
-        except:
-            print(f"Failed to read image from {image_path}, skipping.")
+        if not os.path.exists(image_path):
+            print(f"Image not found: {image_path}. Skipping.")
             continue
 
-        if image is not None: # Check image is opened successfully
-            percentage = calculate_black_pixel_percentage(image, threshold=threshold_value)
-            print(f"Image {i}.png: % black pixels = {percentage:.2f}%")
-        else: # Error message for debugging
-             print(f"Error: could not load image at {image_path}")
+        # Read the image in grayscale
+        img = cv2.imread(image_path, cv2.IMREAD_GRAYSCALE)
+
+        if img is None:
+            print(f"Could not read image: {image_path}. Skipping.")
+            continue
+
+        # Apply binary thresholding
+        # Pixels with a value > 10 will be set to 255 (white)
+        # Pixels with a value <= 10 will be set to 0 (black)
+        threshold_value = 10
+        _, binary_img = cv2.threshold(img, threshold_value, 255, cv2.THRESH_BINARY)
+
+        # Calculate the total number of pixels
+        total_pixels = binary_img.size
+
+        # Calculate the number of black pixels (pores)
+        # In THRESH_BINARY, black pixels are 0.
+        # cv2.countNonZero counts white pixels (255).
+        # So, black pixels = total pixels - white pixels.
+        white_pixels = cv2.countNonZero(binary_img)
+        black_pixels = total_pixels - white_pixels
+
+        # Calculate the percentage of black pixels (Pore %)
+        pore_percentage = (black_pixels / total_pixels) * 100
+
+        # Display the results
+        print(f"Image: {image_name} | Pore %: {pore_percentage:.2f}%")
+
+    print("--- Analysis Complete ---")
+
+# --- Main Execution ---
+if __name__ == "__main__":
+    # Define the directory containing the images
+    # NOTE: Ensure the '/content/' directory exists and contains 1.png to 25.png
+    # If running locally, change this path to your images' location.
+    image_directory = '/content/'
+
+    # Check if the directory exists (basic check)
+    if not os.path.isdir(image_directory):
+        print(f"Error: Directory not found at {image_directory}")
+        print("Please ensure your images (1.png to 25.png) are in this directory.")
+        # As we cannot create/upload files here, we'll proceed
+        # but expect 'Image not found' errors unless running in an
+        # environment where /content/ exists and is populated.
+
+    # Create dummy files for demonstration if /content/ exists but is empty
+    # (This part is for demonstration; in a real scenario, files would exist)
+    if os.path.isdir(image_directory) and not any(f.endswith('.png') for f in os.listdir(image_directory)):
+        print("Directory exists but seems empty. Creating dummy images for demonstration...")
+        for i in range(1, 26):
+            dummy_image_path = os.path.join(image_directory, f"{i}.png")
+            # Create a 100x100 dummy image
+            # Make some pixels dark (<10) and some light (>10)
+            dummy_img_data = np.ones((100, 100), dtype=np.uint8) * 100
+            # Add some 'pores' (pixels with value < 10)
+            dummy_img_data[20:50, 30:70] = 5  # Example pore area
+            dummy_img_data[70:80, 10:90] = 8  # Another example pore area
+            cv2.imwrite(dummy_image_path, dummy_img_data)
+        print("Dummy images created.")
+
+
+    analyze_sem_images(image_directory)
