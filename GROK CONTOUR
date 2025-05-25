@@ -1,69 +1,57 @@
-# Gerekli kütüphaneleri yükleme
-!pip install opencv-python numpy pandas
-
 import cv2
 import numpy as np
-import pandas as pd
 import os
+from pathlib import Path
 
-# Analiz sonuçlarını saklamak için liste oluşturma
+# Directory containing images
+image_dir = "/content/"
+
+# Lists to store results
 results = []
 
-# 1.png'den 25.png'e kadar olan görüntüleri işleme
+# Process each image (1.png to 25.png)
 for i in range(1, 26):
-    file_name = f"{i}.png"
+    # Load image
+    image_path = os.path.join(image_dir, f"{i}.png")
+    if not os.path.exists(image_path):
+        print(f"Image {image_path} not found, skipping.")
+        continue
     
-    # Görüntüyü okuma (siyah-beyaz olarak)
-    if os.path.exists(file_name):
-        img = cv2.imread(file_name, cv2.IMREAD_GRAYSCALE)
-        
-        # Görüntü yüklenemediyse hata mesajı
-        if img is None:
-            print(f"{file_name} yüklenemedi.")
-            continue
-        
-        # Toplam piksel sayısını hesaplama
-        total_pixels = img.size
-        
-        # Görüntüyü binary (ikili) forma çevirme (eşikleme)
-        _, thresh = cv2.threshold(img, 50, 255, cv2.THRESH_BINARY_INV)
-        
-        # Konturları bulma
-        contours, _ = cv2.findContours(thresh, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
-        
-        # Parçacık sayısı
-        num_particles = len(contours)
-        
-        # Toplam alan (px²)
-        total_area = sum(cv2.contourArea(contour) for contour in contours)
-        
-        # Ortalama boyut (px²)
-        avg_size = total_area / num_particles if num_particles > 0 else 0
-        
-        # Alan yüzdesi (%)
-        area_percent = (total_area / total_pixels) * 100 if total_pixels > 0 else 0
-        
-   
-        # Sonuçları listeye ekleme
-        results.append({
-            "Image": file_name,
-            "Number of Particles": num_particles,
-            "Total Area (px²)": total_area,
-            "Average Size (px²)": avg_size,
-            "Area %": area_percent,
-          
-        })
-        
-        print(f"{file_name} işlendi.")
-    else:
-        print(f"{file_name} bulunamadı.")
+    img = cv2.imread(image_path, cv2.IMREAD_GRAYSCALE)
+    if img is None:
+        print(f"Failed to load image {image_path}, skipping.")
+        continue
+    
+    # Get image dimensions
+    height, width = img.shape
+    total_pixels = height * width
+    
+    # Apply binary inverse thresholding
+    _, thresh = cv2.threshold(img, 50, 255, cv2.THRESH_BINARY_INV)
+    
+    # Find contours
+    contours, _ = cv2.findContours(thresh, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
+    
+    # Calculate metrics
+    num_particles = len(contours)
+    total_area = sum(cv2.contourArea(contour) for contour in contours)
+    avg_size = total_area / num_particles if num_particles > 0 else 0
+    area_percent = (total_area / total_pixels * 100) if total_pixels > 0 else 0
+    
+    # Store results
+    results.append({
+        'Image': f"{i}.png",
+        'Number of Particles': num_particles,
+        'Total Area (px²)': total_area,
+        'Average Size (px²)': avg_size,
+        'Area %': area_percent
+    })
 
-# Sonuçları pandas DataFrame'e çevirme
-df = pd.DataFrame(results)
-
-# CSV dosyasına kaydetme
-df.to_csv("sem_analysis_results.csv", index=False)
-print("Sonuçlar 'sem_analysis_results.csv' dosyasına kaydedildi.")
-
-# DataFrame'i ekranda gösterme (isteğe bağlı)
-print(df)
+# Print results
+print("\nSEM Image Analysis Results:")
+print("-" * 80)
+print(f"{'Image':<10} {'Particles':<12} {'Total Area (px²)':<18} {'Avg Size (px²)':<18} {'Area %':<10}")
+print("-" * 80)
+for result in results:
+    print(f"{result['Image']:<10} {result['Number of Particles']:<12} {result['Total Area (px²)']:<18.1f} {result['Average Size (px²)']:<18.1f} {result['Area %']:<10.2f}")
+print("-" * 80)
